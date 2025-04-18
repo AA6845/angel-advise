@@ -52,7 +52,8 @@
   </div>
   <div class="right">
     <h3>Gesprächsprotokoll</h3>
-    <div id="phasesList"></div> <!-- Hier kommen später die Buttons rein -->
+    <div id="phasesList"></div><div id="hintContainer"></div>    <!-- Hier kommen später die Buttons rein -->
+    <div id="hints"></div> 
     <div id="summary"></div>
   </div>
   
@@ -64,61 +65,110 @@ const apiKey = "sk-svcacct-8cs5V_p-par4FY6UqBnp5J3t1_qnRhwGpgCJoWzU8uRr84YJX7emp
 const ultraPhases = [
   {
     description: "Gesprächseinstieg & Orientierung",
-    user: { role: "user", content: "Starte das Gespräch mit {{NAME_SCHULDNER}}. Struktur:\n1. Begrüßung: 'Frau/Herr {{NAME_SCHULDNER}}, ich verstehe Ihre Zurückhaltung total.'\n2. Anlass klären: 'Es geht nicht um ein Verkaufsgespräch oder eine Umfrage.'\n3. Grund nennen: 'Ich habe eine Rückfrage zu einer Rechnung mit rechtlichem Bestand.'\nBei Nachfragen: 'Wir prüfen erst kurz Ihre Angaben, dann erkläre ich alles Weitere.' Danach sofort zum Adressabgleich überleiten." },
-    examples: ["Worum geht es?", "Ich habe nichts bestellt.", "Kennen wir uns?"],
-    goal: "Klare Gesprächsöffnung und Zielklärung ohne Diskussionen.",
-    hint: "Bei offener Gesprächsannahme → Ja, bei Ablehnung oder Blockade → Nein."
+    user: {
+      role: "user",
+      content: "Starte freundlich aber strukturiert:\n1. Begrüßung: 'Frau/Herr {{NAME_SCHULDNER}}, ich verstehe Ihre Zurückhaltung total.'\n2. Anlass klären: 'Es geht nicht um ein Verkaufsgespräch oder eine Umfrage.'\n3. Grund nennen: 'Ich habe eine Rückfrage zu einer Rechnung mit rechtlichem Bestand.'\nWenn Unsicherheit besteht: 'Wir prüfen erst kurz Ihre Angaben, dann erkläre ich alles Weitere.' Danach direkt zum Adressabgleich überleiten."
+    },
+    hints: {
+      ziel: "Vertrauensbasis schaffen, Gesprächsbereitschaft sichern.",
+      typischeEinwände: ["Wer sind Sie?", "Worum geht es?", "Ich mache keine Umfragen."],
+      verhaltenBeiJa: "Direkt zum Adressabgleich weiterleiten.",
+      verhaltenBeiNein: "Kurz ruhig bleiben, sachlich die Notwendigkeit erklären, dann erneut versuchen."
+    }
   },
   {
     description: "Adressabgleich",
-    user: { role: "user", content: "Führe den Adressabgleich konsequent durch:\n1. Frage: 'Darf ich zur Sicherheit Ihre Adresse prüfen? Stimmt: {{ADRESSE}}?'\n2. Wenn bestätigt: 'Danke. Dann weiß ich, dass ich mit der richtigen Person spreche.'\nBei Ablehnung: Ruhig und kurz erklären, dass Identitätsprüfung gesetzlich vorgeschrieben ist. Danach überleiten zur nächsten Phase." },
-    examples: ["Warum fragen Sie das?", "Geht Sie nichts an!", "Stimmt nicht!"],
-    goal: "Identität bestätigen oder korrekt klären.",
-    hint: "Adresse bestätigt → Ja, Adresse verweigert → Nein."
+    user: {
+      role: "user",
+      content: "Frage direkt und verbindlich:\n'Darf ich zur Sicherheit Ihre Adresse prüfen? Stimmt: {{ADRESSE}}?'\nBei Ablehnung: 'Identitätsprüfung ist gesetzlich vorgeschrieben, ich darf ohne Bestätigung nicht weitermachen.' Danach sofort zum nächsten Schritt überleiten."
+    },
+    hints: {
+      ziel: "Identität sicherstellen, rechtlichen Rahmen schaffen.",
+      typischeEinwände: ["Warum brauchen Sie meine Adresse?", "Was passiert mit meinen Daten?"],
+      verhaltenBeiJa: "Dankeschön sagen und weitermachen.",
+      verhaltenBeiNein: "Ruhig bleiben, Pflicht zur Identitätsprüfung erklären."
+    }
   },
   {
     description: "Seriöse Meldung & rechtlicher Rahmen",
-    user: { role: "user", content: "Klarer rechtlicher Einstieg:\n1. Meldung: 'Ich melde mich aus dem Unternehmen {{UNTERNEHMEN}}, im Auftrag unseres Mandanten {{MANDANT}}.'\n2. Betrag nennen: 'Es geht um eine offene Forderung in Höhe von {{BETRAG}} Euro.'\n3. Zielfrage: 'Können wir das noch außergerichtlich klären?'\nDanach schweigen und Antwort abwarten. Keine Details diskutieren." },
-    examples: ["Ich kenne den Mandanten nicht.", "Schon bezahlt!", "Was soll das?"],
-    goal: "Schuldner zur außergerichtlichen Einigung bewegen.",
-    hint: "Zustimmung oder Zahlungsbereitschaft → Ja, Ablehnung oder Streit → Nein."
+    user: {
+      role: "user",
+      content: "Klar und seriös auftreten:\n'Ich melde mich aus dem Unternehmen {{UNTERNEHMEN}}, im Auftrag unseres Mandanten {{MANDANT}}.'\n'Es geht um eine offene Forderung in Höhe von {{BETRAG}} Euro.'\n'Können wir das noch außergerichtlich klären?'\nDanach ruhig warten – keine Details diskutieren!"
+    },
+    hints: {
+      ziel: "Forderung etablieren, außergerichtliche Lösung anbieten.",
+      typischeEinwände: ["Ich weiß von keiner Forderung.", "Ich habe schon bezahlt."],
+      verhaltenBeiJa: "Direkt zur Zahlungsvereinbarung oder Sachverhaltsklärung überleiten.",
+      verhaltenBeiNein: "Sachverhaltsklärung einleiten, keine lange Diskussion."
+    }
   },
   {
-    description: "Sachverhaltsklärung (bei Bedarf)",
-    user: { role: "user", content: "Nur aktivieren, wenn Schuldner widerspricht ('kenne ich nicht', 'habe bezahlt').\n1. Frage: 'Wann genau haben Sie überwiesen, Frau/Herr {{NAME_SCHULDNER}}?'\n2. Bei Unklarheit: 'Wie viel? An wen?'\nKeine Belege anfordern. Danach erklären: 'Ich gehe davon aus, dass Sie bezahlt haben. Möglicherweise Zahlendreher. Ich würde daher am {{FRISTTAG}} die Abbuchung anstoßen.'" },
-    examples: ["Ich habe das bezahlt!", "Hab nix bekommen.", "Das war was anderes."],
-    goal: "Unstimmigkeiten aufnehmen und Zahlungsversuch trotzdem absichern.",
-    hint: "Aussage plausibel → Ja, Widerspruch bleibt bestehen → Nein."
+    description: "Sachverhaltsklärung (nur bei Bedarf)",
+    user: {
+      role: "user",
+      content: "Nur wenn Schuldner widerspricht:\n'Wann genau haben Sie überwiesen, Frau/Herr {{NAME_SCHULDNER}}?'\nBei Unsicherheit: 'Wie viel? An wen?'\nDann sofort erklären: 'Ich gehe davon aus, dass Sie bezahlt haben. Ich würde daher vorsorglich am {{FRISTTAG}} die Abbuchung anstoßen.'"
+    },
+    hints: {
+      ziel: "Zahlungsdokumentation klären, Zahlungslücke verstehen.",
+      typischeEinwände: ["Ich habe das schon längst überwiesen.", "Das Konto war vielleicht falsch."],
+      verhaltenBeiJa: "Kulant reagieren, aber Abbuchung vorschlagen.",
+      verhaltenBeiNein: "Neutral bleiben, keine Schuldzuweisungen."
+    }
   },
   {
     description: "Einwandbehandlung (nur bei expliziter Ablehnung)",
-    user: { role: "user", content: "Nur aktivieren, wenn Schuldner explizit ablehnt ('zahle ich nicht'):\nAntwort: 'Okay, dann gebe ich den Vorgang ans Amtsgericht weiter. Dort entstehen erhebliche Mehrkosten. Die Entscheidung liegt bei Ihnen.' Danach: Nicht diskutieren. Ruhe bewahren." },
-    examples: ["Zahle ich sowieso nicht!", "Sehen wir uns vor Gericht!", "Ich verklage euch!"],
-    goal: "Klare Konfrontation und Abgrenzung ohne Emotionen.",
-    hint: "Nach Ablehnung ruhig bleiben und Gespräch abschließen → Ja."
+    user: {
+      role: "user",
+      content: "Nur aktivieren bei klarer Ablehnung:\n'Okay, dann gebe ich den Vorgang ans Amtsgericht weiter. Dort entstehen erhebliche Mehrkosten. Die Entscheidung liegt bei Ihnen.'\nDanach still bleiben, keine Diskussion."
+    },
+    hints: {
+      ziel: "Druck aufbauen ohne aggressiv zu sein, Entscheidung beim Schuldner lassen.",
+      typischeEinwände: ["Dann lassen Sie es eben auf ein Gerichtsverfahren ankommen.", "Ich zahle sowieso nichts."],
+      verhaltenBeiJa: "Wenn Einlenken: Weiter im Prozess.",
+      verhaltenBeiNein: "Notieren und Gespräch respektvoll beenden."
+    }
   },
   {
     description: "Zahlungsvereinbarung & Ratenmodell",
-    user: { role: "user", content: "Biete zuerst Vollzahlung {{BETRAG}} an.\nWenn Ratenzahlung gewünscht:\n1. Hinweis: 'Ratenzahlung ist grundsätzlich nicht vorgesehen.'\n2. Nachfrage: 'Nennen Sie mir bitte Ihren maximal monatlich möglichen Betrag.'\n3. NLP-Technik: 'Normalerweise bewegen sich unsere Raten zwischen {{WUNSCHRATE}} und {{WUNSCHRATE_PLUS20}} Euro.'\nImmer realistische Raten anstreben." },
-    examples: ["Kann ich abstottern?", "Habe kein Geld.", "Erst nächsten Monat möglich."],
-    goal: "Realistische Zahlungszusage oder Ratenplan erreichen.",
-    hint: "Wenn ein realistisches Zahlungsangebot kommt → Ja."
+    user: {
+      role: "user",
+      content: "Biete zuerst Vollzahlung {{BETRAG}} an.\nWenn nötig, Ratenzahlung anbieten:\n1. Hinweis: 'Ratenzahlung ist eigentlich nicht vorgesehen.'\n2. Nachfrage: 'Was wäre maximal monatlich möglich?'\nHinweis auf übliche Raten: '{{WUNSCHRATE}} - {{WUNSCHRATE_PLUS20}} Euro.'"
+    },
+    hints: {
+      ziel: "Realistische Zahlungsvereinbarung erreichen.",
+      typischeEinwände: ["Ich kann nur ganz wenig zahlen.", "Ich brauche länger Zeit."],
+      verhaltenBeiJa: "Direkt alle Details (Summe, Rate, Termin) fixieren.",
+      verhaltenBeiNein: "Versuchen, wenigstens eine kleine Rate zu vereinbaren."
+    }
   },
   {
     description: "Zusammenfassung der Vereinbarung",
-    user: { role: "user", content: "Fasse exakt zusammen:\n'Frau/Herr {{NAME_SCHULDNER}}, wir haben heute vereinbart: Zahlung der Forderung von {{MANDANT}} über {{BETRAG}} Euro. Sie zahlen monatlich {{RATE}} Euro, spätestens bis zum {{ZAHLUNGSTERMIN}}.' Klare Erinnerung an Zahlungspflicht. Keine offenen Fragen mehr zulassen." },
-    examples: ["Was genau habe ich zugesagt?", "Das muss ich mir noch überlegen."],
-    goal: "Verbindliche klare Vereinbarung sichern.",
-    hint: "Wenn alle Vereinbarungen klar wiederholt und bestätigt wurden → Ja."
+    user: {
+      role: "user",
+      content: "Alles verbindlich zusammenfassen:\n'Wir haben heute vereinbart: Zahlung von {{BETRAG}} Euro, monatlich {{RATE}} Euro, Zahlung spätestens bis {{ZAHLUNGSTERMIN}}.'"
+    },
+    hints: {
+      ziel: "Verbindlichkeit schaffen, Missverständnisse verhindern.",
+      typischeEinwände: ["Ich habe das anders verstanden.", "Ich weiß nicht genau wann ich zahlen kann."],
+      verhaltenBeiJa: "Freundlich bestätigen, Gesprächsabschluss vorbereiten.",
+      verhaltenBeiNein: "Ruhig Details erneut erklären."
+    }
   },
   {
-    description: "Gesprächsausstieg",
-    user: { role: "user", content: "Beende verbindlich:\n'Vielen Dank für das Gespräch. Ich zähle auf Ihre pünktliche Zahlung.' Keine weiteren Gesprächsanreize bieten." },
-    examples: ["Alles klar.", "Machen wir so.", "Bis dann."],
-    goal: "Positiver Abschluss und Sicherung der Zahlungserwartung.",
-    hint: "Wenn Gespräch beendet und Schuldner positiv → Ja."
+    description: "Gesprächsende",
+    user: {
+      role: "user",
+      content: "Verbindlich abschließen:\n'Vielen Dank für das Gespräch. Ich zähle auf Ihre pünktliche Zahlung.'\nKeine Floskeln, keine Unsicherheiten erzeugen!"
+    },
+    hints: {
+      ziel: "Positiv, aber bestimmt abschließen.",
+      typischeEinwände: ["Was wenn ich es nicht schaffe?", "Ich rufe nochmal an."],
+      verhaltenBeiJa: "Bestätigen und verabschieden.",
+      verhaltenBeiNein: "Nicht erneut diskutieren, freundlich beenden."
+    }
   }
 ];
+
 
 
 let currentPhase = -1;
@@ -143,61 +193,66 @@ function collectUserData() {
 
 function renderPhaseList() {
   const listContainer = document.getElementById('phasesList');
-  listContainer.innerHTML = ''; // Leeren!
+  listContainer.innerHTML = ''; // Vorher alles löschen
 
   ultraPhases.forEach((phase, index) => {
-    const phaseContainer = document.createElement('div');
-    phaseContainer.style.marginBottom = '15px';
-    phaseContainer.style.padding = '10px';
-    phaseContainer.style.borderRadius = '8px';
-    phaseContainer.style.border = '1px solid #ccc';
-
-    if (index === currentPhase) {
-      phaseContainer.style.backgroundColor = '#cce5ff'; // aktuelle Phase blau markieren
-      phaseContainer.style.fontSize = 'larger'; // größere Schrift für aktive Phase
-
-      // Wenn aktuelle Phase → Hinweise anzeigen
-      const examples = document.createElement('div');
-      examples.innerHTML = `<strong>Typische Ausreden:</strong><br>${phase.examples.join("<br>")}`;
-      examples.style.marginTop = '10px';
-      phaseContainer.appendChild(examples);
-
-      const goal = document.createElement('div');
-      goal.innerHTML = `<strong>Ziel:</strong> ${phase.goal}`;
-      goal.style.marginTop = '10px';
-      phaseContainer.appendChild(goal);
-
-      const hint = document.createElement('div');
-      hint.innerHTML = `<strong>Hinweis:</strong> ${phase.hint}`;
-      hint.style.marginTop = '10px';
-      phaseContainer.appendChild(hint);
-
-      if (phase.notes && phase.notes.length > 0) {
-        const notesDiv = document.createElement('div');
-        notesDiv.innerHTML = `<strong>Gesprächsnotizen:</strong><br>${phase.notes.join("<br>")}`;
-        notesDiv.style.marginTop = '10px';
-        phaseContainer.appendChild(notesDiv);
-      }
-    }
-
     const button = document.createElement('button');
     button.innerText = phase.description;
+    button.style.display = 'block';
+    button.style.marginBottom = '5px';
+    button.style.padding = '10px';
     button.style.width = '100%';
-    button.style.marginTop = '8px';
-    button.style.padding = '8px';
+    button.style.textAlign = 'left';
+    button.style.borderRadius = '8px';
+    button.style.border = (index === currentPhase) ? '2px solid #4CAF50' : '1px solid #ccc';
+    button.style.backgroundColor = (index === currentPhase) ? '#e8f5e9' : '#f9f9f9';
     button.style.fontWeight = (index === currentPhase) ? 'bold' : 'normal';
 
     button.onclick = () => {
       currentPhase = index;
       loadPhase();
       callGPTforCurrentPhase();
-      renderPhaseList();
+      renderPhaseList(); // Damit aktuelle Phase farblich bleibt
+      showHintForCurrentPhase();
     };
 
-    phaseContainer.insertBefore(button, phaseContainer.firstChild);
-    listContainer.appendChild(phaseContainer);
+    listContainer.appendChild(button);
   });
 }
+
+function showHintForCurrentPhase() {
+  const hintContainer = document.getElementById('hintContainer');
+  const phase = ultraPhases[currentPhase];
+
+  if (!hintContainer) {
+    console.error('HintContainer fehlt!');
+    return;
+  }
+
+  hintContainer.innerHTML = `
+    <div style="margin-top:10px; padding:10px; border:1px solid #ccc; border-radius:8px;">
+      <button onclick="toggleHints()" style="margin-bottom:10px;">Hinweise anzeigen/ausblenden</button>
+      <div id="hintContent" style="display:none;">
+        <strong>Ziel dieser Phase:</strong><br>
+        ${phase.goal || "Kein Ziel definiert"}<br><br>
+        <strong>Typische Ausreden:</strong><br>
+        ${phase.excuses ? phase.excuses.join("<br>") : "Keine Beispiele vorhanden."}
+      </div>
+    </div>
+  `;
+}
+
+function toggleHints() {
+  const content = document.getElementById('hintContent');
+  if (content) {
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+    } else {
+      content.style.display = 'none';
+    }
+  }
+}
+
 
 
 
@@ -231,6 +286,7 @@ function loadPhase() {
   if (currentPhase >= ultraPhases.length) {
     document.getElementById('chat').innerHTML = "<div class='activePhase'><strong>Gespräch abgeschlossen!</strong></div>";
     document.getElementById('gptHelp').innerText = "Vielen Dank für das Gespräch.";
+    renderPhaseHints(); // <<< WICHTIG: leere Hinweise am Ende
     return;
   }
   
@@ -239,25 +295,12 @@ function loadPhase() {
   for (const key in userData) {
     userPrompt = userPrompt.replaceAll(`{{${key}}}`, userData[key]);
   }
-
-  let beispielText = "";
-  if (phase.beispiele && phase.beispiele.length > 0) {
-    beispielText = `<br><strong>Typische Antworten:</strong><ul>${phase.beispiele.map(b => `<li>${b}</li>`).join('')}</ul>`;
-  }
-  let zielText = phase.ziel ? `<br><strong>Ziel:</strong> ${phase.ziel}` : "";
-  let klickHinweisText = phase.klickHinweis ? `<br><strong>Hinweis für Buttons:</strong> ${phase.klickHinweis}` : "";
-
-  document.getElementById('chat').innerHTML = `
-    <div class='activePhase'>
-      <strong>${phase.description}</strong><br><br>
-      ${zielText}
-      ${klickHinweisText}
-      ${beispielText}
-    </div>
-  `;
-
+  
+  document.getElementById('chat').innerHTML = `<div class='activePhase'><strong>${phase.description}</strong></div>`;
   callGPT(userPrompt);
+  renderPhaseHints(); // <<< HINWEISE ZUR AKTUELLEN PHASE ZEIGEN
 }
+
 
 
 function callGPTforCurrentPhase() {
@@ -322,6 +365,34 @@ function nextPhase() {
     renderPhaseList(); // auch hier: Gesprächsprotokoll nochmal updaten
   }
 }
+function renderPhaseHints() {
+  const hintsContainer = document.getElementById('hints');
+  if (!hintsContainer) return;
+
+  const phase = ultraPhases[currentPhase];
+  if (!phase || !phase.hints) {
+    hintsContainer.innerHTML = "";
+    return;
+  }
+
+  const { ziel, typischeEinwände, verhaltenBeiJa, verhaltenBeiNein } = phase.hints;
+
+  hintsContainer.innerHTML = `
+    <div style="background: #e8f4fc; padding: 15px; margin-top: 15px; border-radius: 10px; box-shadow: 0 0 5px rgba(0,0,0,0.1);">
+      <h4>🔍 Ziel dieser Phase:</h4>
+      <p>${ziel}</p>
+
+      <h4>🛑 Typische Einwände:</h4>
+      <ul>${typischeEinwände.map(einwand => `<li>${einwand}</li>`).join('')}</ul>
+
+      <h4>✔️ Verhalten bei JA:</h4>
+      <p>${verhaltenBeiJa}</p>
+
+      <h4>❌ Verhalten bei NEIN:</h4>
+      <p>${verhaltenBeiNein}</p>
+    </div>
+  `;
+}
 
 
 document.getElementById('btnYes').onclick = nextPhase;
@@ -352,6 +423,8 @@ document.getElementById('notes').addEventListener('keydown', (e) => {
     renderPhaseList();  // Notiz im Gesprächsprotokoll aktualisieren
   }
 });
+renderPhaseList();
+
 
 </script>
 
