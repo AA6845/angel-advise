@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Angel Adviser</title>
+  <style>
+    body { background-color: #d9ebf9; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    h1 { color: #2266aa; }
+    .container { display: flex; gap: 20px; margin-top: 20px; width: 90%; max-width: 1200px; }
+    .left, .right { flex: 1; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .chatBox { min-height: 200px; margin-bottom: 20px; }
+    .activePhase { background-color: #cce5ff; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: bold; }
+    #progress { margin-bottom: 15px; font-size: 16px; font-weight: bold; color: #333; }
+    textarea, input { width: 100%; margin-top: 10px; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
+    button { margin: 5px; padding: 10px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; }
+    .yes { background-color: #4CAF50; color: white; }
+    .no { background-color: #f44336; color: white; }
+    .next { background-color: #ff9800; color: white; }
+    .pdf { background-color: #007BFF; color: white; }
+    .reset { background-color: #FFA500; color: white; }
+    .gpt-response { margin-top: 10px; background: #e6f2ff; padding: 10px; border-radius: 5px; font-style: italic; }
+  </style>
+</head>
+<body>
+
+<h1>Angel Adviser</h1>
+<div id="progress">Fortschritt: 0% abgeschlossen</div>
+
+<div class="container">
+  <div class="left">
+    <div>
+      <h3>Schuldnerdaten</h3>
+      <input id="inputName" placeholder="Name des Schuldners">
+      <input id="inputAdresse" placeholder="Adresse des Schuldners">
+      <input id="inputUnternehmen" placeholder="Ihr Unternehmen">
+      <input id="inputMandant" placeholder="Mandant">
+      <input id="inputBetrag" placeholder="Betrag (€)">
+      <input id="inputWunschrate" placeholder="Wunschrate (€)">
+      <input id="inputFristtag" placeholder="Fristtag (Datum)">
+      <button onclick="startConversation()" style="margin-top:10px; background:#4CAF50; color:white;">Gespräch starten</button>
+    </div>
+
+    <div id="chat" class="chatBox" style="margin-top:20px;">Angel: Bitte füllen Sie oben die Schuldnerdaten aus und starten Sie das Gespräch.</div>
+    <div id="gptHelp" class="gpt-response"></div>
+    <textarea id="notes" placeholder="Hier Ihre Gesprächsnotizen eintragen..."></textarea>
+    <br>
+    <button id="btnYes" class="yes">Ja</button>
+    <button id="btnNo" class="no">Nein</button>
+    <button id="btnNext" class="next">Weiter</button>
+    <button id="btnPDF" class="pdf">PDF speichern</button>
+    <button id="btnRestart" class="reset">Neustart</button>
+  </div>
+  <div class="right">
+    <h3>Gesprächsprotokoll</h3>
+    <div id="phasesList"></div> <!-- Hier kommen später die Buttons rein -->
+    <div id="summary"></div>
+  </div>
+  
+</div>
+
+<script>
+const apiKey = "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";
+
+const ultraPhases = [
+  {
+    description: "Gesprächseinstieg & Orientierung",
+    user: { role: "user", content: "Starte das Gespräch mit {{NAME_SCHULDNER}}. Struktur:\n1. Begrüßung: 'Frau/Herr {{NAME_SCHULDNER}}, ich verstehe Ihre Zurückhaltung total.'\n2. Anlass klären: 'Es geht nicht um ein Verkaufsgespräch oder eine Umfrage.'\n3. Grund nennen: 'Ich habe eine Rückfrage zu einer Rechnung mit rechtlichem Bestand.'\nBei Nachfragen: 'Wir prüfen erst kurz Ihre Angaben, dann erkläre ich alles Weitere.' Danach sofort zum Adressabgleich überleiten." },
+    examples: ["Worum geht es?", "Ich habe nichts bestellt.", "Kennen wir uns?"],
+    goal: "Klare Gesprächsöffnung und Zielklärung ohne Diskussionen.",
+    hint: "Bei offener Gesprächsannahme → Ja, bei Ablehnung oder Blockade → Nein."
+  },
+  {
+    description: "Adressabgleich",
+    user: { role: "user", content: "Führe den Adressabgleich konsequent durch:\n1. Frage: 'Darf ich zur Sicherheit Ihre Adresse prüfen? Stimmt: {{ADRESSE}}?'\n2. Wenn bestätigt: 'Danke. Dann weiß ich, dass ich mit der richtigen Person spreche.'\nBei Ablehnung: Ruhig und kurz erklären, dass Identitätsprüfung gesetzlich vorgeschrieben ist. Danach überleiten zur nächsten Phase." },
+    examples: ["Warum fragen Sie das?", "Geht Sie nichts an!", "Stimmt nicht!"],
+    goal: "Identität bestätigen oder korrekt klären.",
+    hint: "Adresse bestätigt → Ja, Adresse verweigert → Nein."
+  },
+  {
+    description: "Seriöse Meldung & rechtlicher Rahmen",
+    user: { role: "user", content: "Klarer rechtlicher Einstieg:\n1. Meldung: 'Ich melde mich aus dem Unternehmen {{UNTERNEHMEN}}, im Auftrag unseres Mandanten {{MANDANT}}.'\n2. Betrag nennen: 'Es geht um eine offene Forderung in Höhe von {{BETRAG}} Euro.'\n3. Zielfrage: 'Können wir das noch außergerichtlich klären?'\nDanach schweigen und Antwort abwarten. Keine Details diskutieren." },
+    examples: ["Ich kenne den Mandanten nicht.", "Schon bezahlt!", "Was soll das?"],
+    goal: "Schuldner zur außergerichtlichen Einigung bewegen.",
+    hint: "Zustimmung oder Zahlungsbereitschaft → Ja, Ablehnung oder Streit → Nein."
+  },
+  {
+    description: "Sachverhaltsklärung (bei Bedarf)",
+    user: { role: "user", content: "Nur aktivieren, wenn Schuldner widerspricht ('kenne ich nicht', 'habe bezahlt').\n1. Frage: 'Wann genau haben Sie überwiesen, Frau/Herr {{NAME_SCHULDNER}}?'\n2. Bei Unklarheit: 'Wie viel? An wen?'\nKeine Belege anfordern. Danach erklären: 'Ich gehe davon aus, dass Sie bezahlt haben. Möglicherweise Zahlendreher. Ich würde daher am {{FRISTTAG}} die Abbuchung anstoßen.'" },
+    examples: ["Ich habe das bezahlt!", "Hab nix bekommen.", "Das war was anderes."],
+    goal: "Unstimmigkeiten aufnehmen und Zahlungsversuch trotzdem absichern.",
+    hint: "Aussage plausibel → Ja, Widerspruch bleibt bestehen → Nein."
+  },
+  {
+    description: "Einwandbehandlung (nur bei expliziter Ablehnung)",
+    user: { role: "user", content: "Nur aktivieren, wenn Schuldner explizit ablehnt ('zahle ich nicht'):\nAntwort: 'Okay, dann gebe ich den Vorgang ans Amtsgericht weiter. Dort entstehen erhebliche Mehrkosten. Die Entscheidung liegt bei Ihnen.' Danach: Nicht diskutieren. Ruhe bewahren." },
+    examples: ["Zahle ich sowieso nicht!", "Sehen wir uns vor Gericht!", "Ich verklage euch!"],
+    goal: "Klare Konfrontation und Abgrenzung ohne Emotionen.",
+    hint: "Nach Ablehnung ruhig bleiben und Gespräch abschließen → Ja."
+  },
+  {
+    description: "Zahlungsvereinbarung & Ratenmodell",
+    user: { role: "user", content: "Biete zuerst Vollzahlung {{BETRAG}} an.\nWenn Ratenzahlung gewünscht:\n1. Hinweis: 'Ratenzahlung ist grundsätzlich nicht vorgesehen.'\n2. Nachfrage: 'Nennen Sie mir bitte Ihren maximal monatlich möglichen Betrag.'\n3. NLP-Technik: 'Normalerweise bewegen sich unsere Raten zwischen {{WUNSCHRATE}} und {{WUNSCHRATE_PLUS20}} Euro.'\nImmer realistische Raten anstreben." },
+    examples: ["Kann ich abstottern?", "Habe kein Geld.", "Erst nächsten Monat möglich."],
+    goal: "Realistische Zahlungszusage oder Ratenplan erreichen.",
+    hint: "Wenn ein realistisches Zahlungsangebot kommt → Ja."
+  },
+  {
+    description: "Zusammenfassung der Vereinbarung",
+    user: { role: "user", content: "Fasse exakt zusammen:\n'Frau/Herr {{NAME_SCHULDNER}}, wir haben heute vereinbart: Zahlung der Forderung von {{MANDANT}} über {{BETRAG}} Euro. Sie zahlen monatlich {{RATE}} Euro, spätestens bis zum {{ZAHLUNGSTERMIN}}.' Klare Erinnerung an Zahlungspflicht. Keine offenen Fragen mehr zulassen." },
+    examples: ["Was genau habe ich zugesagt?", "Das muss ich mir noch überlegen."],
+    goal: "Verbindliche klare Vereinbarung sichern.",
+    hint: "Wenn alle Vereinbarungen klar wiederholt und bestätigt wurden → Ja."
+  },
+  {
+    description: "Gesprächsausstieg",
+    user: { role: "user", content: "Beende verbindlich:\n'Vielen Dank für das Gespräch. Ich zähle auf Ihre pünktliche Zahlung.' Keine weiteren Gesprächsanreize bieten." },
+    examples: ["Alles klar.", "Machen wir so.", "Bis dann."],
+    goal: "Positiver Abschluss und Sicherung der Zahlungserwartung.",
+    hint: "Wenn Gespräch beendet und Schuldner positiv → Ja."
+  }
+];
+
+
+let currentPhase = -1;
+let completedPhases = 0;
+let notes = [];
+let userData = {};
+
+function collectUserData() {
+  userData = {
+    NAME_SCHULDNER: document.getElementById('inputName').value || 'Schuldner',
+    ADRESSE: document.getElementById('inputAdresse').value || 'Adresse',
+    UNTERNEHMEN: document.getElementById('inputUnternehmen').value || 'Ihr Unternehmen',
+    MANDANT: document.getElementById('inputMandant').value || 'Mandant',
+    BETRAG: document.getElementById('inputBetrag').value || '0',
+    WUNSCHRATE: document.getElementById('inputWunschrate').value || '0',
+    WUNSCHRATE_PLUS20: (parseInt(document.getElementById('inputWunschrate').value || 0) + 20).toString(),
+    FRISTTAG: document.getElementById('inputFristtag').value || 'Datum',
+    RATE: document.getElementById('inputWunschrate').value || '0',
+    ZAHLUNGSTERMIN: '5. des Monats'
+  };
+}
+
+function renderPhaseList() {
+  const listContainer = document.getElementById('phasesList');
+  listContainer.innerHTML = ''; // Leeren!
+
+  ultraPhases.forEach((phase, index) => {
+    const phaseContainer = document.createElement('div');
+    phaseContainer.style.marginBottom = '15px';
+    phaseContainer.style.padding = '10px';
+    phaseContainer.style.borderRadius = '8px';
+    phaseContainer.style.border = '1px solid #ccc';
+
+    if (index === currentPhase) {
+      phaseContainer.style.backgroundColor = '#cce5ff'; // aktuelle Phase blau markieren
+      phaseContainer.style.fontSize = 'larger'; // größere Schrift für aktive Phase
+
+      // Wenn aktuelle Phase → Hinweise anzeigen
+      const examples = document.createElement('div');
+      examples.innerHTML = `<strong>Typische Ausreden:</strong><br>${phase.examples.join("<br>")}`;
+      examples.style.marginTop = '10px';
+      phaseContainer.appendChild(examples);
+
+      const goal = document.createElement('div');
+      goal.innerHTML = `<strong>Ziel:</strong> ${phase.goal}`;
+      goal.style.marginTop = '10px';
+      phaseContainer.appendChild(goal);
+
+      const hint = document.createElement('div');
+      hint.innerHTML = `<strong>Hinweis:</strong> ${phase.hint}`;
+      hint.style.marginTop = '10px';
+      phaseContainer.appendChild(hint);
+
+      if (phase.notes && phase.notes.length > 0) {
+        const notesDiv = document.createElement('div');
+        notesDiv.innerHTML = `<strong>Gesprächsnotizen:</strong><br>${phase.notes.join("<br>")}`;
+        notesDiv.style.marginTop = '10px';
+        phaseContainer.appendChild(notesDiv);
+      }
+    }
+
+    const button = document.createElement('button');
+    button.innerText = phase.description;
+    button.style.width = '100%';
+    button.style.marginTop = '8px';
+    button.style.padding = '8px';
+    button.style.fontWeight = (index === currentPhase) ? 'bold' : 'normal';
+
+    button.onclick = () => {
+      currentPhase = index;
+      loadPhase();
+      callGPTforCurrentPhase();
+      renderPhaseList();
+    };
+
+    phaseContainer.insertBefore(button, phaseContainer.firstChild);
+    listContainer.appendChild(phaseContainer);
+  });
+}
+
+
+
+function callGPTforCurrentPhase() {
+  const phase = ultraPhases[currentPhase];
+  let userPrompt = phase.user.content;
+  for (const key in userData) {
+    userPrompt = userPrompt.replaceAll(`{{${key}}}`, userData[key]);
+  }
+  callGPT(userPrompt);
+}
+
+function startConversation() {
+  collectUserData();
+  currentPhase = 0;
+  completedPhases = 0;
+  notes = [];
+  document.getElementById('summary').innerHTML = '';
+  updateProgress();
+  loadPhase();
+  renderPhaseList(); // <<< HIER hinzufügen
+}
+
+
+function updateProgress() {
+  const percent = ((completedPhases / ultraPhases.length) * 100).toFixed(0);
+  document.getElementById('progress').innerText = `Fortschritt: ${percent}% abgeschlossen`;
+}
+
+function loadPhase() {
+  if (currentPhase >= ultraPhases.length) {
+    document.getElementById('chat').innerHTML = "<div class='activePhase'><strong>Gespräch abgeschlossen!</strong></div>";
+    document.getElementById('gptHelp').innerText = "Vielen Dank für das Gespräch.";
+    return;
+  }
+  
+  const phase = ultraPhases[currentPhase];
+  let userPrompt = phase.user.content;
+  for (const key in userData) {
+    userPrompt = userPrompt.replaceAll(`{{${key}}}`, userData[key]);
+  }
+
+  let beispielText = "";
+  if (phase.beispiele && phase.beispiele.length > 0) {
+    beispielText = `<br><strong>Typische Antworten:</strong><ul>${phase.beispiele.map(b => `<li>${b}</li>`).join('')}</ul>`;
+  }
+  let zielText = phase.ziel ? `<br><strong>Ziel:</strong> ${phase.ziel}` : "";
+  let klickHinweisText = phase.klickHinweis ? `<br><strong>Hinweis für Buttons:</strong> ${phase.klickHinweis}` : "";
+
+  document.getElementById('chat').innerHTML = `
+    <div class='activePhase'>
+      <strong>${phase.description}</strong><br><br>
+      ${zielText}
+      ${klickHinweisText}
+      ${beispielText}
+    </div>
+  `;
+
+  callGPT(userPrompt);
+}
+
+
+function callGPTforCurrentPhase() {
+  const phase = ultraPhases[currentPhase];
+  let userPrompt = phase.user.content;
+  for (const key in userData) {
+    userPrompt = userPrompt.replaceAll(`{{${key}}}`, userData[key]);
+  }
+  callGPT(userPrompt);
+}
+
+
+async function callGPT(userPrompt) {
+  document.getElementById('gptHelp').innerText = "Lade Formulierung...";
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "Du bist ein hochtrainierter Inkasso-Mitarbeiter, der strikt nach einem Schulungsleitfaden handelt. Deine Sprache ist leicht kollegial, aber sachlich-streng, zielgerichtet und effizient. Keine Floskeln. Keine offenen Fragen ohne ausdrückliche Anweisung. Keine Wiederholungen. Nach Abschluss einer Phase darfst du nicht zurückspringen. Du reagierst flexibel auf Schuldnerantworten, ohne die Gesprächsstruktur zu verlieren. Dein Ziel ist es, eine außergerichtliche Zahlung zu erreichen oder den gerichtlichen Weg vorzubereiten."
+          },
+          { role: "user", content: userPrompt }
+        ]
+      })
+    });
+    const data = await res.json();
+    document.getElementById('gptHelp').innerText = data.choices?.[0]?.message.content || 'Keine Antwort erhalten.';
+  } catch (error) {
+    console.error(error);
+    document.getElementById('gptHelp').innerText = 'Verbindungsfehler';
+  }
+}
+
+function saveNote() {
+  const text = document.getElementById('notes').value.trim();
+  if (text) {
+    if (!ultraPhases[currentPhase].notes) {
+      ultraPhases[currentPhase].notes = [];
+    }
+    ultraPhases[currentPhase].notes.push(text);
+  }
+}
+
+
+function nextPhase() {
+  saveNote();            // Notiz speichern
+  completedPhases++;     // Fortschritt erhöhen
+  currentPhase++;        // nächste Phase
+
+  if (currentPhase < ultraPhases.length) {
+    loadPhase();         // neue Phase laden
+    callGPTforCurrentPhase(); // neue GPT-Antwort holen
+    renderPhaseList();   // Gesprächsprotokoll-Liste neu zeichnen
+    updateProgress();    // Fortschritt updaten
+  } else {
+    document.getElementById('chat').innerHTML = "<strong>Gespräch abgeschlossen!</strong>";
+    document.getElementById('gptHelp').innerText = "Zusammenfassung gespeichert.";
+    renderPhaseList(); // auch hier: Gesprächsprotokoll nochmal updaten
+  }
+}
+
+
+document.getElementById('btnYes').onclick = nextPhase;
+document.getElementById('btnNo').onclick = nextPhase;
+document.getElementById('btnNext').onclick = nextPhase;
+
+document.getElementById('notes').addEventListener('keydown', function(event) {
+  if (event.key === "Enter" && !event.shiftKey) { // Enter drücken (ohne Shift)
+    event.preventDefault(); // Kein Zeilenumbruch
+    saveNote();
+    document.getElementById('notes').value = ''; // Eingabefeld leeren
+    renderPhaseList(); // neu zeichnen, damit Notizen sichtbar sind
+  }
+});
+
+document.getElementById('btnPDF').onclick = () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.text(document.getElementById('summary').innerText, 10, 10);
+  doc.save('gespraechsprotokoll.pdf');
+};
+document.getElementById('btnRestart').onclick = startConversation;
+
+document.getElementById('notes').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault(); // verhindert Zeilenumbruch
+    saveNote();         // nur Notiz speichern
+    renderPhaseList();  // Notiz im Gesprächsprotokoll aktualisieren
+  }
+});
+
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</body>
+</html>
